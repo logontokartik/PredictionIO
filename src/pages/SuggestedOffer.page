@@ -1,0 +1,252 @@
+<apex:page showHeader="false" standardStylesheets="false" sidebar="false" applyHtmlTag="false" applyBodyTag="false" docType="html-5.0" controller="ImageController">    
+
+<html xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">    
+
+<head>
+
+  <title>NeuraFlash</title>
+   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+   <!--Import Google Icon Font-->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://rawgit.com/ravichandra1/ForceSpinner/master/src/css/forcespinner.css" type="text/css"/>
+  <apex:stylesheet value="{!URLFOR($Resource.slds213, 'assets/styles/salesforce-lightning-design-system.min.css')}" />
+</head>    
+
+<body>    
+
+  <!-- REQUIRED SLDS WRAPPER -->
+  <div class="slds" id="topDiv">    
+    <!-- MASTHEAD -->
+    <h1 class="slds-text-heading--label slds-m-bottom--small slds-align--absolute-center">
+      Suggested Offers
+    </h1>
+    <!-- This is for Notifications -->
+    <article class="slds-card" id="notificationCard">
+      <div class="slds-card__header slds-grid">
+        <header class="slds-media slds-media--center slds-has-flexi-truncate">
+          <div class="slds-media__body slds-truncate">
+            <h2>
+              <a href="javascript:void(0);" class="slds-text-link--reset">
+                <span class="slds-text-heading--small">Suggested Offers</span>
+              </a>
+            </h2>
+          </div>
+        </header>
+
+      </div>
+      <div class="slds-card__body" id="imageDiv"></div>
+      <div class="slds-card__footer" id="textDiv"></div>
+    </article>
+    <!-- END for Notifications -->
+  </div>
+  <!-- / REQUIRED SLDS WRAPPER -->    
+  <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+  <script src="https://cdn.rawgit.com/mailtoharshit/ForceSpinner/master/src/js/forcespinner.js"></script>
+  <apex:includeScript value="/support/console/36.0/integration.js"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/3.0.3/handlebars.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.2/underscore-min.js"></script>
+  
+  <script type="text/javascript">
+  
+  var productImageMap;
+
+  $(document).ready(function(){
+    productImageMap = new Object();
+
+    ImageController.allSettings(function(result,event){
+      console.log('in callback');
+      if (event.status) {
+        $.each(result,function(idx,rec){
+          productImageMap[result[idx].Name] = result[idx];
+        });
+        console.log('Product Map');
+        console.log(productImageMap);
+        init();
+      } 
+    });
+  });
+
+  function init() {
+
+    $('#displayCard').hide();
+    $('#notificationCard').show(); 
+    console.log('inside ready');
+    forceSpin(imageDiv, 'facebook', 'green', 'transparent');
+    $('#textDiv').html('Gathering Account Info...');
+    setTimeout(callToPrediction,1000);
+  
+  }
+
+  function callToPrediction() {
+    $('#imageDiv').empty();
+    forceSpin(imageDiv, 'cubes', 'blue', 'transparent');
+    $('#textDiv').html('Calling to Prediction IO...'); 
+    setTimeout(performCallout,1000); 
+  }
+
+  function performCallout() {
+    $('#imageDiv').empty();
+    forceSpin(imageDiv, 'google-material');
+    $('#textDiv').html('Getting info from Prediction IO...'); 
+    setTimeout(doRemoting,1000); 
+  }
+
+  function doRemoting() {
+    
+    offersTemplate  = Handlebars.compile($("#offer_template").html());    
+    
+    var caseId = getParameterByName('id');
+    console.log('CASE ID');
+    console.log(caseId);
+    var offers = new Array();
+    ImageController.calltoNextBestOffer(caseId,function(result,event){
+      console.log('in callback');
+      if (event.status) {
+        console.log(result);
+        $.each(result.recommendation,function(idx){
+          var recommendation = result.recommendation[idx];
+          var prod = productImageMap[recommendation.product];
+          var score = recommendation.score;
+          console.log('PROD');
+          console.log(prod);
+          var offer = new Object();
+          offer.id = prod.Id;
+          offer.Image = prod.Image_URL__c;
+          offer.Label = prod.Product_Label__c;
+          offer.subtitle = prod.Subtitle_1__c;
+          offer.subtitle2 = prod.Subtitle_2__c;
+          offer.score = score;
+          offer.HoverText = 'This is a simple hover';
+          offers.push(offer);
+        });
+
+        var record_data = {"offers":offers};
+        var result_html = offersTemplate(record_data);
+        $('#topDiv').html(result_html);
+        //$('#offerDiv').html('Balance Transfer'); 
+        //$('#textDiv').html('Suggestions Complete'); 
+        //$('#displayCard').show();
+        $('#notificationCard').hide();
+        $('.slds-popover').hide();
+
+
+
+        $('.acceptBtn').on('click',function(e){
+            e.preventDefault();
+            var recordid = $(this).attr('id');
+            var caseid = recordid.substring(0,recordid.indexOf('accepted'));
+            $('#'+caseid+'displayCard').fadeOut( 1000, function() {
+              $('#'+caseid+'displayCard').remove();
+            });
+        });
+
+        $('.rejectBtn').on('click',function(e){
+            e.preventDefault();
+            var recordid = $(this).attr('id');
+            var caseid = recordid.substring(0,recordid.indexOf('rejected'));
+            $('#'+caseid+'displayCard').slideUp( 1000, function() {
+              $('#'+caseid+'displayCard').remove();
+            });
+        });
+
+        $('.clsBtn').on('click',function(e){
+            e.preventDefault();
+            var recordid = $(this).attr('id');
+            var caseid = recordid.substring(0,recordid.indexOf('closed'));
+            $('#'+caseid+'displayCard').fadeOut( 1000, function() {
+              $('#'+caseid+'displayCard').remove();
+            });
+        });
+
+        $('#offerDiv').hover(
+          function(){
+            $('.slds-popover').show();
+          },
+          function(){
+            $('.slds-popover').hide();
+          }
+        );
+
+      } 
+    });
+    
+  }
+
+  function getParameterByName(name, url) {
+    if (!url) url = window.location.href;
+    name = name.replace(/[\[\]]/g, "\\$&");
+    var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+        results = regex.exec(url);
+    if (!results) return null;
+    if (!results[2]) return '';
+    return decodeURIComponent(results[2].replace(/\+/g, " "));
+  }
+
+  </script>
+
+  <script id="offer_template" type="text/x-handlers-template">
+     {{#each offers}}
+     <article class="slds-card slds-card--narrow" id="{{id}}displayCard">
+        <div class="slds-card__header slds-grid">
+            <header class="slds-media slds-media--center slds-has-flexi-truncate">
+                <div class="slds-media__figure">
+                    <img id="theImage" src="{{Image}}" width="40" height="50" />
+                    <!-- <svg aria-hidden="true" class="slds-icon slds-icon-standard-contact slds-icon--small">
+                  <use xlink:href="/assets/icons/standard-sprite/svg/symbols.svg#contact"></use>
+                </svg> -->
+                </div>
+                <div class="slds-media__body slds-truncate">
+                    <h2>
+                  <a href="javascript:void(0);" class="slds-text-link--reset">
+                    <span class="slds-text-heading--small" id="offerDiv">{{Label}}</span>
+                  </a>
+                </h2>
+                </div>
+            </header>
+            <div class="slds-no-flex">
+              <button class="slds-button slds-button--icon-border slds-not-selected clsBtn" aria-live="assertive" id={{id}}closed>
+                <svg aria-hidden="true" class="slds-button__icon">
+                  <use xlink:href="{!URLFOR($Resource.slds213, 'assets/icons/utility-sprite/svg/symbols.svg#close')}" /></use>
+                </svg>
+                <span class="slds-assistive-text">Close</span>
+              </button>
+            </div>
+        </div>
+        <div class="slds-popover slds-popover--tooltip slds-nubbin--bottom-left" role="tooltip" id="help" style="position:absolute;top:0px;left:15px;">
+            <div class="slds-popover__body">{{HoverText}}</div>
+        </div>
+        <div class="slds-card__body">
+
+            <div class="slds-card__body--inner slds-grid slds-wrap slds-grid--pull-padded">
+                <div class="slds-tile slds-media slds-card__tile slds-p-horizontal--small slds-size--1-of-1 slds-medium-size--1-of-3 slds-hint-parent">
+                    <div class="slds-media__body">
+                        <div class="slds-grid slds-grid--align-spread slds-has-flexi-truncate">
+                            <h3 class="slds-text-body--regular" title="Title">{{subtitle}}</h3>
+                        </div>
+                        <div class="slds-tile__detail slds-text-body--small">
+                            <dl class="slds-dl--horizontal">
+                                <dd class="slds-dl--horizontal__detail slds-tile__meta">
+                                    <span class="slds-truncate" title="Type">{{subtitle2}}</span>
+                                </dd>
+                                <dd class="slds-dl--horizontal__detail slds-tile__meta">
+                                    <span class="slds-truncate" title="Score">{{score}}</span>
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <div class="slds-card__footer" id="textDiv">
+          <button class="slds-button slds-button--brand acceptBtn" id="{{id}}accepted">Accepted</button>
+          <button class="slds-button slds-button--destructive rejectBtn" id="{{id}}rejected">Rejected</button>
+        </div>
+    </article> 
+    {{/each}}
+  </script>
+
+
+</body>
+</html>
+</apex:page>

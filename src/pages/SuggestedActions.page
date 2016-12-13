@@ -1,0 +1,209 @@
+<apex:page showHeader="false" standardStylesheets="false" sidebar="false" applyHtmlTag="false" applyBodyTag="false" docType="html-5.0" controller="ImageController">    
+
+<html>    
+
+<head>
+
+  <title>NeuraFlash</title>
+   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+   <!--Import Google Icon Font-->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://rawgit.com/ravichandra1/ForceSpinner/master/src/css/forcespinner.css" type="text/css"/>
+  <apex:stylesheet value="{!URLFOR($Resource.slds213, 'assets/styles/salesforce-lightning-design-system.min.css')}" />
+</head>    
+
+<body>    
+
+  <!-- REQUIRED SLDS WRAPPER -->
+  <div class="slds" id="topDiv">    
+    <!-- MASTHEAD -->
+    <h1 class="slds-text-heading--label slds-m-bottom--small slds-align--absolute-center">
+      Suggested Actions
+    </h1>
+    <!-- This is for Notifications -->
+    <article class="slds-card" id="notificationCard">
+      <div class="slds-card__header slds-grid">
+        <header class="slds-media slds-media--center slds-has-flexi-truncate">
+          <div class="slds-media__body slds-truncate">
+            <h2>
+              <a href="javascript:void(0);" class="slds-text-link--reset">
+                <span class="slds-text-heading--small">Suggested Actions</span>
+              </a>
+            </h2>
+          </div>
+        </header>
+
+      </div>
+      <div class="slds-card__body" id="imageDiv"></div>
+      <div class="slds-card__footer" id="textDiv"></div>
+    </article>
+    <!-- END for Notifications -->
+  </div>
+  <!-- / REQUIRED SLDS WRAPPER -->    
+  <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+  <script src="https://cdn.rawgit.com/mailtoharshit/ForceSpinner/master/src/js/forcespinner.js"></script>
+  <apex:includeScript value="/support/console/36.0/integration.js"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/3.0.3/handlebars.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.2/underscore-min.js"></script>
+  
+  <script type="text/javascript">
+  
+  var actionsMap;
+
+  $(document).ready(function(){
+    actionsMap = new Object();
+
+    ImageController.allActions(function(result,event){
+      console.log('in callback');
+      if (event.status) {
+        $.each(result,function(idx,rec){
+          actionsMap[result[idx].Name] = result[idx];
+        });
+        console.log('Product Map');
+        console.log(actionsMap);
+        init();
+      } 
+    });
+  });
+
+  function init() {
+
+    $('#displayCard').hide();
+    $('#notificationCard').show(); 
+    console.log('inside ready');
+    forceSpin(imageDiv, 'facebook', 'green', 'transparent');
+    $('#textDiv').html('Gathering Account Info...');
+    setTimeout(callToPrediction,1000);
+  
+  }
+
+  function callToPrediction() {
+    $('#imageDiv').empty();
+    forceSpin(imageDiv, 'cubes', 'blue', 'transparent');
+    $('#textDiv').html('Calling to Prediction IO...'); 
+    setTimeout(performCallout,1000); 
+  }
+
+  function performCallout() {
+    $('#imageDiv').empty();
+    forceSpin(imageDiv, 'google-material');
+    $('#textDiv').html('Getting info from Prediction IO...'); 
+    setTimeout(doRemoting,1000); 
+  }
+
+  function doRemoting() {
+    
+    actionsTemplate  = Handlebars.compile($("#action_template").html());    
+    
+    var caseId = getParameterByName('id');
+    console.log('CASE ID');
+    console.log(caseId);
+    var actions = new Array();
+    ImageController.callToNextBestAction(caseId,function(result,event){
+      console.log('in callback');
+      if (event.status) {
+        console.log(result);
+        $.each(result,function(idx){
+          var currentAction = actionsMap[result[idx]];		
+          var action = new Object();
+          action.id = currentAction.Id;
+          action.Label = currentAction.Label__c;
+          action.detail = currentAction.Details__c;
+          action.recommendation = currentAction.Recommendations__c;
+          action.score = currentAction.Score__c;
+          actions.push(action);
+        });
+
+        var record_data = {"actions":actions};
+        var result_html = actionsTemplate(record_data);
+        $('#topDiv').html(result_html);
+        //$('#actionDiv').html('Balance Transfer'); 
+        //$('#textDiv').html('Suggestions Complete'); 
+        //$('#displayCard').show();
+        $('#notificationCard').hide();
+        $('.slds-popover').hide();
+
+        $('.rejectBtn').on('click',function(e){
+            e.preventDefault();
+            var recordid = $(this).attr('id');
+            var caseid = recordid.substring(0,recordid.indexOf('rejected'));
+            $('#'+caseid+'displayCard').slideUp( 1000, function() {
+              $('#'+caseid+'displayCard').remove();
+            });
+        });
+      } 
+    });
+    
+  }
+
+  function getParameterByName(name, url) {
+    if (!url) url = window.location.href;
+    name = name.replace(/[\[\]]/g, "\\$&");
+    var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+        results = regex.exec(url);
+    if (!results) return null;
+    if (!results[2]) return '';
+    return decodeURIComponent(results[2].replace(/\+/g, " "));
+  }
+
+  </script>
+  <script type="text/x-handlers-template" id="notification_template">
+  	<div class="slds-notify_container">
+	  <div class="slds-notify slds-notify--alert slds-theme--alert-texture" role="alert">
+	    <button class="slds-button slds-notify__close slds-button--icon-inverse">
+	      <svg aria-hidden="true" class="slds-icon slds-icon-standard-contact slds-icon--small">
+	      		<use xlink:href="{!URLFOR($Resource.slds213, 'assets/icons/utility-sprite/svg/symbols.svg#close')}"/></use>
+	       </svg> 
+	      <span class="slds-assistive-text">Close</span>
+	    </button>
+	    <span class="slds-assistive-text">Info</span>
+	    <h2>No Actions at this time</h2>
+	  </div>
+	</div>
+  </script>	
+  <script id="action_template" type="text/x-handlers-template">
+     {{#each actions}}
+     <article class="slds-card slds-card--narrow displayCardCls" id="{{id}}displayCard">
+        <div class="slds-card__header slds-grid">
+            <header class="slds-media slds-media--center slds-has-flexi-truncate">
+                <div class="slds-media__figure">
+                	<svg aria-hidden="true" class="slds-icon slds-icon-standard-contact slds-icon--small">
+                  		<use xlink:href="{!URLFOR($Resource.slds213, 'assets/icons/utility-sprite/svg/symbols.svg#questions_and_answers')}" /></use>
+                	</svg> 
+                </div>
+                <div class="slds-media__body slds-truncate">
+                    <h2>
+                  <a href="javascript:void(0);" class="slds-text-link--reset">
+                    <span class="slds-text-heading--small" id="actionDiv">{{Label}}</span>
+                  </a>
+                </h2>
+                </div>
+            </header>
+        </div>
+        <div class="slds-card__body">
+			<div class="slds-tile slds-media slds-card__tile slds-p-horizontal--small slds-size--1-of-1 slds-medium-size--1-of-3 slds-hint-parent">
+			<div class="slds-media__body">
+                        <div class="slds-grid slds-grid--align-spread slds-has-flexi-truncate">
+                            <h3 class="slds-text-body--regular" title="Title">{{detail}}</h3>
+                        </div>
+                        <div class="slds-tile__detail slds-text-body--small">
+                            <dl class="slds-dl--horizontal">
+                                <dd class="slds-dl--horizontal__detail slds-tile__meta">
+                                    <span class="slds-truncate" title="Type"><b>{{recommendation}}</b> recommendations | <b>{{score}}</b>%</span>
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>    
+        </div>
+        <div class="slds-card__footer" id="textDiv">
+          <button class="slds-button slds-button--destructive rejectBtn" id="{{id}}rejected">Dismiss</button>
+        </div>
+    </article> 
+    {{/each}}
+  </script>
+
+
+</body>
+</html>
+</apex:page>
